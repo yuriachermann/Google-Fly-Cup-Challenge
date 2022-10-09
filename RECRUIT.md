@@ -1,14 +1,11 @@
-# RECRUIT STAGE
-
+# [RECRUIT STAGE](https://www.cloudskillsboost.google/games/3139/labs/19212)
+___
 ### Task 1: Import the Data to BigQuery
-
-Install Google Cloud CLI
-<br>
-Create the dataset and tables
+Activate Cloud Shell:
+![42bf1200-852e-446e-9bea-c43dcc6118cd](https://user-images.githubusercontent.com/39781072/194774555-33ff1813-461d-47ef-9c26-44c7a051897f.jpg)
+Paste the shell command to create the dataset and tables:
 ```sh
 bq mk drl
-for file in `gsutil ls gs://spls/gsp394/tables/*.csv`; do TABLE_NAME=`echo $file | cut -d '/' -f6 | cut -d '.' -f1`; bq load --autodetect --source_format=CSV --replace=true drl.$TABLE_NAME $file; done
-
 PROJECT_ID=$(gcloud config get-value project)
 gsutil ls gs://spls/gsp394/tables | grep csv$ | while read file; do tname=`echo $file|cut -d"/" -f6| cut -d. -f1 `; bq load --source_format=CSV --autodetect $PROJECT_ID:drl.$tname $file ; done
 ```
@@ -227,37 +224,82 @@ WHERE
 ```
 ___
 ### Task 11: Visualize Pilot Heat Statistics
+
+Open [Data Studio](https://datastudio.google.com/) and log in with the given account:
+
+Open a Blank project and add Data using BigQuery:
+
+![ff92adb8-15d4-4450-bcdd-00a1aa164554](https://user-images.githubusercontent.com/39781072/194774310-5f505162-749e-4093-9ded-f17f3ade3a42.jpg)
+
+Select CUSTOM QUERY > your project:
+
+![9f1244f5-11c3-45b7-9e55-948ebd595c3b](https://user-images.githubusercontent.com/39781072/194774297-262e478e-690c-43fa-a29a-e445e7eeb244.jpg)
+
+Paste the following SQL query and select Add:
+
 ```sql
-WITH cte AS
-(SELECT
-`drl.pilots`.name,
-`drl.heat_standings`.heat_id,
-`drl.heat_standings`.points,
-`drl.heat_standings`.minimum_time
-FROM `drl.heat_standings`
-LEFT JOIN `drl.event_pilots` ON `drl.event_pilots`.id = event_pilot_id
-LEFT JOIN `drl.pilots` ON `drl.pilots`.id = `drl.event_pilots`.pilot_id
-WHERE points != 0 AND minimum_time != 'DNF' AND minimum_time != ''),
-cte2 AS
-(SELECT
-name AS pilot_name,
-heat_id,
-minimum_time,
-points,
-time
-(timestamp_seconds
-(CAST
-  (AVG
-    (UNIX_SECONDS
-      (PARSE_TIMESTAMP('%H:%M.%S', minimum_time))
+SELECT
+  pilots.name AS pilot_name,
+  heat_standings.heat_id AS heat_id,
+  heat_standings.minimum_time AS minimum_time,
+  heat_standings.points AS points,
+  time(
+    timestamp_seconds(
+      CAST(
+        AVG(
+          UNIX_SECONDS(
+            PARSE_TIMESTAMP(
+              '%H:%M.%S', minimum_time
+            )
+          )
+        ) OVER(
+          ORDER BY heat_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS INT64
+      )
     )
-  OVER (ORDER BY heat_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-AS INT64)
-)
-)
-AS running_avg FROM cte)
-SELECT *,
-TIME_DIFF(PARSE_TIME('%H:%M.%S', minimum_time), running_avg, SECOND) as time_diff_from_avg FROM cte2
-Footer
+  ) AS running_avg,
+  TIME_DIFF(
+    PARSE_TIME(
+      '%H:%M.%S', minimum_time
+    ), time(
+      timestamp_seconds(
+        CAST(
+          AVG(
+            UNIX_SECONDS(
+              PARSE_TIMESTAMP(
+                '%H:%M.%S', minimum_time
+              )
+            )
+          ) OVER(
+            ORDER BY heat_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ) AS INT64
+        )
+      )
+    ), SECOND
+  ) AS time_diff_from_avg
+FROM
+  drl.heat_standings AS heat_standings 
+    LEFT JOIN
+  drl.event_pilots AS event_pilots
+    ON event_pilots.id = event_pilots.id
+    LEFT JOIN
+  drl.pilots AS pilots
+    ON pilots.id = event_pilots.pilot_id
+WHERE
+  points != 0 AND
+  points IS NOT NULL AND
+  minimum_time != 'DNF' AND
+  minimum_time != ''
 ```
+
+Add a Line chart:
+
+![421723c5-3811-46f1-888a-25e87e085e51](https://user-images.githubusercontent.com/39781072/194774438-0ac63c83-3ae8-4147-9487-bd229efc2bf6.jpg)
+
+And a Drop-down list control:
+
+![908c5a22-b4e2-45ef-9e87-9b768b2d0b9f](https://user-images.githubusercontent.com/39781072/194774441-601a9388-3b80-47a9-885f-895c93704c20.jpg)
+
+Select heat_id as Dimension and points as metric (with Running delta as Running calculation)
+
 ___
